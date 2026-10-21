@@ -4,11 +4,26 @@ from __future__ import annotations
 
 import random
 
+import config
 from games.memory import MemoryBoard
 
 
 def make_board(cols: int = 4, rows: int = 4) -> MemoryBoard:
     return MemoryBoard(cols=cols, rows=rows, rng=random.Random(7))
+
+
+def match_any_pair(b: MemoryBoard) -> None:
+    """Flip one currently-matched pair on the board and clear the lock."""
+    for i, s in enumerate(b.symbols):
+        if b.matched[i]:
+            continue
+        mate = next(
+            j for j, t in enumerate(b.symbols) if t == s and j != i and not b.matched[j]
+        )
+        b.flip(i)
+        b.flip(mate)
+        b._lock_until = 0.0
+        return
 
 
 def test_pairs_created() -> None:
@@ -85,3 +100,57 @@ def test_invalid_grid_rejected() -> None:
 
     with pytest.raises(ValueError):
         MemoryBoard(cols=3, rows=3)  # odd number of cells
+
+
+# --------------------------------------------------------------------------
+# Combo system
+# --------------------------------------------------------------------------
+def test_combo_increments_on_consecutive_matches() -> None:
+    b = make_board()
+    match_any_pair(b)
+    assert b.combo == 1
+    match_any_pair(b)
+    assert b.combo == 2
+    assert b.best_combo == 2
+
+
+def test_combo_resets_on_mismatch() -> None:
+    b = make_board()
+    match_any_pair(b)  # combo = 1
+    # Force a mismatch between two unmatched cards of different symbols.
+    i = next(i for i, m in enumerate(b.matched) if not m)
+    other = next(
+        j for j, s in enumerate(b.symbols)
+        if not b.matched[j] and j != i and s != b.symbols[i]
+    )
+    b.flip(i)
+    b.flip(other)
+    assert b.combo == 0
+    b._lock_until = 0.0
+
+
+def test_combo_multiplier_grows_with_streak() -> None:
+    b = make_board()
+    b.combo = 1
+    m1 = b.combo_multiplier()
+    b.combo = 3
+    m3 = b.combo_multiplier()
+    assert m3 > m1
+    assert m1 == 1.0
+
+
+def test_earned_scales_with_combo() -> None:
+    b = make_board()
+    match_any_pair(b)  # combo 1 -> 1.0x
+    match_any_pair(b)  # combo 2 -> 1.5x
+    expected = round(config.MEMORY_MATCH_SCORE * 1.0) + round(config.MEMORY_MATCH_SCORE * 1.5)
+    assert b.earned == expected
+
+
+# --------------------------------------------------------------------------
+# Themes
+# --------------------------------------------------------------------------
+def test_custom_tokens_are_used() -> None:
+    b = MemoryBoard(cols=2, rows=2, tokens=("A", "B"), rng=random.Random(0))
+    assert set(b.symbols) <= {"A", "B"}
+    assert len(b.symbols) == 4

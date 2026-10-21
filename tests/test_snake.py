@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import random
 
-from games.snake import Direction, SnakeLogic
+import config
+from games.snake import Direction, PowerType, PowerUp, SnakeLogic
 
 
 def make_logic(size: int = 10) -> SnakeLogic:
@@ -78,3 +79,88 @@ def test_reset_restores_state() -> None:
     assert logic.score == 0
     assert logic.alive is True
     assert len(logic.snake) == 3
+
+
+# --------------------------------------------------------------------------
+# Progressive speed
+# --------------------------------------------------------------------------
+def test_effective_fps_increases_with_score() -> None:
+    logic = make_logic()
+    logic.score = 0
+    base = logic.effective_fps()
+    logic.score = config.SNAKE_SPEEDUP_INTERVAL
+    assert logic.effective_fps() == base + 1
+    logic.score = 2 * config.SNAKE_SPEEDUP_INTERVAL
+    assert logic.effective_fps() == base + 2
+
+
+def test_effective_fps_caps_at_max() -> None:
+    logic = make_logic()
+    logic.score = 10_000
+    assert logic.effective_fps() == config.SNAKE_MAX_FPS
+
+
+def test_speed_boost_raises_fps() -> None:
+    logic = make_logic()
+    base = logic.effective_fps()
+    logic.speed_boost_steps = 10
+    expected = min(base + config.SNAKE_SPEED_BONUS_FPS, config.SNAKE_MAX_FPS)
+    assert logic.effective_fps() == expected
+
+
+# --------------------------------------------------------------------------
+# Power-ups
+# --------------------------------------------------------------------------
+def test_powerup_spawns_when_chance_is_certain() -> None:
+    logic = SnakeLogic(grid_size=8, rng=random.Random(1), powerup_chance=1.0)
+    head = logic.snake[0]
+    logic.food = (head[0] + 1, head[1])
+    logic.step()  # eats food -> guaranteed power-up drop
+    assert logic.powerup is not None
+
+
+def test_invincibility_wraps_through_walls() -> None:
+    logic = make_logic(size=5)
+    logic.snake = [(4, 2), (3, 2), (2, 2)]
+    logic.direction = Direction.RIGHT
+    logic.invincible_steps = 5
+    logic.step()
+    assert logic.alive is True
+    assert logic.snake[0][0] == 0  # wrapped to the opposite edge
+
+
+def test_invincibility_ignores_self_collision() -> None:
+    logic = make_logic(size=6)
+    logic.snake = [(2, 2), (2, 1), (1, 1)]
+    logic.direction = Direction.UP  # next head (2,1) is already body
+    logic.invincible_steps = 3
+    logic.step()
+    assert logic.alive is True
+
+
+def test_invincibility_expires_after_steps() -> None:
+    logic = make_logic()
+    logic.invincible_steps = 2
+    logic.step()
+    logic.step()
+    assert logic.invincible_steps == 0
+
+
+def test_collect_invincibility_powerup() -> None:
+    logic = make_logic(size=8)
+    head = logic.snake[0]
+    logic.powerup = PowerUp(head[0] + 1, head[1], PowerType.INVINCIBILITY)
+    start_score = logic.score
+    logic.step()
+    assert logic.invincible_steps > 0  # effect applied
+    assert logic.powerup is None       # consumed
+    assert logic.score > start_score   # pickup bonus
+
+
+def test_collect_speed_powerup() -> None:
+    logic = make_logic(size=8)
+    head = logic.snake[0]
+    logic.powerup = PowerUp(head[0] + 1, head[1], PowerType.SPEED)
+    logic.step()
+    assert logic.speed_boost_steps > 0
+    assert logic.powerup is None

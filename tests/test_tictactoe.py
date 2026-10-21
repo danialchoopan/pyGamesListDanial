@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
-from games.tictactoe import Board, Mark, MinimaxAI
+import random
+
+from games.tictactoe import (
+    Board,
+    Difficulty,
+    Mark,
+    MinimaxAI,
+    MoveLog,
+    TicTacToeAI,
+)
 
 
 def board_from(marks: str) -> Board:
@@ -78,3 +87,69 @@ def test_ai_never_loses_full_selfplay() -> None:
             b.make_move(move, turn)
             turn = turn.opponent
         assert b.winner() is not Mark.X, f"AI lost when X opened at {first}"
+
+
+# --------------------------------------------------------------------------
+# Difficulty levels
+# --------------------------------------------------------------------------
+def test_easy_returns_legal_move() -> None:
+    b = Board()
+    ai = TicTacToeAI(Mark.O, Difficulty.EASY, rng=random.Random(3))
+    assert ai.choose_move(b) in b.available_moves()
+
+
+def test_easy_no_move_on_full_board() -> None:
+    b = board_from("XOXOXOOXX")
+    ai = TicTacToeAI(Mark.O, Difficulty.EASY, rng=random.Random(3))
+    assert ai.choose_move(b) == -1
+
+
+def test_medium_takes_immediate_win() -> None:
+    b = board_from("OO.......")  # O wins at index 2
+    ai = TicTacToeAI(Mark.O, Difficulty.MEDIUM, rng=random.Random(1))
+    assert ai.choose_move(b) == 2
+
+
+def test_medium_blocks_opponent_win() -> None:
+    b = board_from("XX.......")  # X threatens index 2
+    ai = TicTacToeAI(Mark.O, Difficulty.MEDIUM, rng=random.Random(1))
+    assert ai.choose_move(b) == 2
+
+
+def test_medium_prefers_center() -> None:
+    b = Board()
+    ai = TicTacToeAI(Mark.O, Difficulty.MEDIUM, rng=random.Random(1))
+    assert ai.choose_move(b) == 4
+
+
+def test_medium_corner_fallback_when_center_taken() -> None:
+    b = board_from("....O....")  # centre occupied, no win/block available
+    ai = TicTacToeAI(Mark.O, Difficulty.MEDIUM, rng=random.Random(1))
+    assert ai.choose_move(b) in (0, 2, 6, 8)
+
+
+def test_hard_delegates_to_minimax() -> None:
+    b = board_from("XX.......")  # must block at 2, like minimax
+    ai = TicTacToeAI(Mark.O, Difficulty.HARD, rng=random.Random(1))
+    assert ai.choose_move(b) == 2
+
+
+# --------------------------------------------------------------------------
+# Move history
+# --------------------------------------------------------------------------
+def test_movelog_records_in_order() -> None:
+    log = MoveLog()
+    log.record(4, Mark.X)
+    log.record(0, Mark.O)
+    assert log.cells() == [4, 0]
+    assert len(log) == 2
+    assert log.last == (0, Mark.O)
+
+
+def test_movelog_undo() -> None:
+    log = MoveLog()
+    log.record(4, Mark.X)
+    assert log.undo() == (4, Mark.X)
+    assert log.undo() is None
+    assert len(log) == 0
+    assert log.last is None

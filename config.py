@@ -170,3 +170,24 @@ BRICK_SIDE_MARGIN: int = 40
 # Tic-Tac-Toe
 TTT_BOARD_CELLS: int = 3
 TTT_CELL_SIZE: int = 140
+TTT_WIN_SCORE: int = 100
+TTT_DRAW_SCORE: int = 25
+
+# --------------------------------------------------------------------------
+# Enhanced features (power-ups, difficulty, themes, combos)
+# --------------------------------------------------------------------------
+# Snake: power-ups and progressive speed-up over time.
+SNAKE_POWERUP_CHANCE: float = 0.30   # chance a power-up spawns when food is eaten
+SNAKE_POWERUP_TTL: int = 20          # steps a dropped power-up stays on the board
+SNAKE_INVINCIBILITY_STEPS: int = 25  # steps of wall/self immunity after pickup
+SNAKE_SPEED_STEPS: int = 30          # steps of speed boost after pickup
+SNAKE_SPEED_BONUS_FPS: int = 6       # extra FPS while speed-boosted
+SNAKE_SPEEDUP_INTERVAL: int = 50     # score earned per permanent +1 FPS
+SNAKE_MAX_FPS: int = 22              # ceiling for the progressive speed-up
+SNAKE_POWERUP_SCORE: int = 25        # points for collecting any power-up
+SNAKE_SPEED_COLOR: Color = CYAN
+SNAKE_INVINCIBLE_COLOR: Color = YELLOW
+
+# Memory: combo scoring (consecutive matches multiply points).
+MEMORY_COMBO_STEP: float = 0.5       # extra multiplier added per combo chain step
+MEMORY_ANIM_SPEED: float = 6.0       # card flip animation speed (progress/second)
