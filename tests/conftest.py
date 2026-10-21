@@ -1,12 +1,23 @@
-"""Shared pytest fixtures."""
+"""Shared pytest fixtures.
+
+The SDL environment variables are set *before* any test (or game module)
+initialises pygame so the suite never touches a real audio or video device -
+important both in CI (no display at all) and locally (no surprise beeps while
+running ``pytest``).
+"""
 
 from __future__ import annotations
 
+import os
 from collections.abc import Iterator
 
 import pytest
 
-from utils import HighScoreStore, Settings
+# Must happen at import time: pygame reads these when the drivers first open.
+os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
+
+from utils import HighScoreStore, Settings  # noqa: E402  (after env setup on purpose)
 
 
 @pytest.fixture

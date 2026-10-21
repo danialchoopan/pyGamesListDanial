@@ -8,7 +8,14 @@ Each game implements:
     submit_score()         - record the final score when applicable
 
 The shared ``run()`` method provides a ready-made game loop so
-individual games only implement their own logic.
+individual games only implement their own logic. It also provides three
+cross-cutting features every game gets for free:
+
+* **Pause/resume** - the P key freezes ``update()`` while still drawing the
+  frame plus a pause overlay (see :meth:`BaseGame.toggle_pause`).
+* **Audio** - ``self.audio`` plays SFX and background music honouring the
+  user's volume settings, and stays silent when no audio device exists.
+* **Score submission** - a small helper around the shared SQLite store.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from collections.abc import Sequence
 import pygame
 
 import config
+from assets import AudioService, get_assets
 from utils import HighScoreStore, Settings, draw_text
 
 
@@ -33,6 +41,8 @@ class BaseGame(ABC):
     score_key: str = "base"
     #: Default target frame rate for this game.
     fps: int = config.DEFAULT_FPS
+    #: Optional background-music track (see :mod:`assets`); None = no music.
+    music_track: str | None = None
 
     def __init__(
         self,
@@ -47,6 +57,10 @@ class BaseGame(ABC):
         self.highscores = highscores
         self._running: bool = False
         self.score: int = 0
+        self.paused: bool = False
+        # Shared services: cached asset loads + volume-aware audio playback.
+        self.assets = get_assets()
+        self.audio = AudioService(self.assets, settings)
         # Fonts shared by subclasses
         self.font_small = pygame.font.SysFont(config.FONT_NAME, config.FONT_SIZE_SMALL)
         self.font_medium = pygame.font.SysFont(config.FONT_NAME, config.FONT_SIZE_MEDIUM)
@@ -74,6 +88,41 @@ class BaseGame(ABC):
     def start(self) -> None:
         """Called once when the game is launched from the menu."""
         self.reset()
+        self.paused = False
+        self.audio.update_settings(self.settings)
+        if self.music_track:
+            self.audio.play_music(self.music_track)
+
+    # ------------------------------------------------------------------
+    # Pause / resume (shared by every game)
+    # ------------------------------------------------------------------
+    def toggle_pause(self) -> bool:
+        """Toggle the paused state; returns the new value.
+
+        Background music is paused/resumed in step with the game so a break
+        in play is also a break in the soundtrack.
+        """
+        self.paused = not self.paused
+        if self.paused:
+            self.audio.pause_music()
+        else:
+            self.audio.resume_music()
+        return self.paused
+
+    def draw_pause_overlay(self, surface: pygame.Surface) -> None:
+        """Draw the translucent \"PAUSED\" banner over the frozen frame."""
+        overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+        overlay.fill((*config.BLACK, 150))
+        surface.blit(overlay, (0, 0))
+        center = (surface.get_width() // 2, surface.get_height() // 2)
+        draw_text(surface, "PAUSED", config.FONT_SIZE_LARGE, config.YELLOW, center=center)
+        draw_text(
+            surface,
+            "P to resume  |  ESC for menu",
+            config.FONT_SIZE_SMALL,
+            config.LIGHT_GREY,
+            center=(center[0], center[1] + 50),
+        )
 
     # ------------------------------------------------------------------
     # Shared loop
@@ -84,37 +133,64 @@ class BaseGame(ABC):
         This is the canonical Pygame frame cycle that every game reuses:
         poll events -> update state -> draw -> flip the back buffer.
         Subclasses only fill in ``handle_events`` / ``update`` / ``draw``.
+
+        The loop itself owns two cross-cutting jobs: the P-key pause (which
+        skips ``update()`` entirely so *nothing* - physics, timers, spawners -
+        advances while the player is away) and stopping the music on exit.
         """
         self._running = True
         self.start()
-        while self._running:
-            # clock.tick(fps) caps the frame rate AND returns the elapsed
-            # milliseconds since the last frame; /1000.0 converts it to the
-            # seconds we hand to update() so movement is frame-rate independent.
-            dt = self.clock.tick(self.fps) / 1000.0
-            events = pygame.event.get()
-            # A window-close request is handled centrally here so no game has
-            # to remember to deal with it.
-            for event in events:
-                if event.type == pygame.QUIT:
+        try:
+            while self._running:
+                # clock.tick(fps) caps the frame rate AND returns the elapsed
+                # milliseconds since the last frame; /1000.0 converts it to the
+                # seconds we hand to update() so movement is frame-rate independent.
+                dt = self.clock.tick(self.fps) / 1000.0
+                events = pygame.event.get()
+                for event in events:
+                    # A window-close request is handled centrally here so no
+                    # game has to remember to deal with it.
+                    if event.type == pygame.QUIT:
+                        self._running = False
+                        return
+                    if event.type == pygame.KEYDOWN and event.key == pygame.K_p:
+                        self.toggle_pause()
+
+                if self.paused:
+                    # While paused the game's own handlers are skipped so no
+                    # input can nudge the simulation; only ESC (back to the
+                    # hub menu) stays live.
+                    if any(
+                        ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE
+                        for ev in events
+                    ):
+                        self._running = False
+                        return
+                    self.draw(self.screen)
+                    self.draw_pause_overlay(self.screen)
+                    pygame.display.flip()
+                    continue
+
+                # handle_events() returning False is the "back to menu" signal.
+                if not self.handle_events(events):
                     self._running = False
                     return
-            # handle_events() returning False is the "back to menu" signal.
-            if not self.handle_events(events):
-                self._running = False
-                return
-            self.update(dt)
-            self.draw(self.screen)
-            if self.settings.show_fps:
-                fps = self.clock.get_fps()
-                draw_text(
-                    self.screen,
-                    f"{fps:5.1f} FPS",
-                    config.FONT_SIZE_SMALL,
-                    config.LIGHT_GREY,
-                    topleft=(8, 8),
-                )
-            pygame.display.flip()  # reveal everything drawn this frame
+                self.update(dt)
+                self.draw(self.screen)
+                if self.settings.show_fps:
+                    fps = self.clock.get_fps()
+                    draw_text(
+                        self.screen,
+                        f"{fps:5.1f} FPS",
+                        config.FONT_SIZE_SMALL,
+                        config.LIGHT_GREY,
+                        topleft=(8, 8),
+                    )
+                pygame.display.flip()  # reveal everything drawn this frame
+        finally:
+            # Runs on every exit path (ESC, window close, or an exception) so
+            # music never keeps playing after the player has left the game.
+            self.audio.stop_music()
 
     def quit(self) -> None:
         """Signal the loop to stop and return to the menu."""
@@ -143,7 +219,7 @@ class BaseGame(ABC):
             text_surf = self.font_small.render(item, True, config.WHITE)
             surface.blit(text_surf, (x, 8))
             x += text_surf.get_width() + 24
-        hint = self.font_small.render("ESC: menu", True, config.LIGHT_GREY)
+        hint = self.font_small.render("P: pause  ESC: menu", True, config.LIGHT_GREY)
         surface.blit(hint, (surface.get_width() - hint.get_width() - 10, 8))
 
     def draw_game_over(

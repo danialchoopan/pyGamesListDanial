@@ -82,7 +82,12 @@ COIN_COLOR: Color = (255, 215, 0)
 
 SPACE_BG: Color = (5, 5, 15)
 PLAYER_SHIP: Color = (80, 200, 120)
-ENEMY_SHIP: Color = (220, 60, 60)
+ENEMY_SHIP: Color = (220, 60, 60)          # grunt - plain marching enemy
+ENEMY_SINE_SHIP: Color = (180, 80, 220)    # sine - weaves side to side
+ENEMY_DIVER_SHIP: Color = (240, 150, 40)   # diver - breaks formation to attack
+ENEMY_SHIPS: dict[str, Color] = {
+    "grunt": ENEMY_SHIP, "sine": ENEMY_SINE_SHIP, "diver": ENEMY_DIVER_SHIP,
+}
 BULLET_COLOR: Color = (255, 255, 120)
 ENEMY_BULLET_COLOR: Color = (255, 120, 120)
 
@@ -191,3 +196,79 @@ SNAKE_INVINCIBLE_COLOR: Color = YELLOW
 # Memory: combo scoring (consecutive matches multiply points).
 MEMORY_COMBO_STEP: float = 0.5       # extra multiplier added per combo chain step
 MEMORY_ANIM_SPEED: float = 6.0       # card flip animation speed (progress/second)
+
+# --------------------------------------------------------------------------
+# Assets / audio
+# --------------------------------------------------------------------------
+# Drop-in folders for art and music. Everything in here is optional: the
+# AssetManager falls back to procedurally synthesised sound effects when a
+# file is missing, and simply stays silent for missing music.
+ASSETS_DIR: Path = BASE_DIR / "assets"
+ASSETS_SOUNDS_DIR: Path = ASSETS_DIR / "sounds"
+ASSETS_IMAGES_DIR: Path = ASSETS_DIR / "images"
+ASSETS_MUSIC_DIR: Path = ASSETS_DIR / "music"
+LEVELS_DIR: Path = DATA_DIR / "levels"          # user levels saved by the editor
+ACHIEVEMENTS_FILE: Path = DATA_DIR / "achievements.json"
+
+SFX_SAMPLE_RATE: int = 22050       # Hz for the procedural SFX synthesiser
+MUSIC_SAMPLE_RATE: int = 11025     # Hz for the fallback music loop (small file)
+MUSIC_FALLBACK_BPM: int = 96       # tempo of the generated music loop
+
+# --------------------------------------------------------------------------
+# Advanced game tuning (platformer, space shooter, breakout)
+# --------------------------------------------------------------------------
+# Platformer
+PLATFORMER_MAX_FALL: float = 18.0        # terminal downward velocity
+PLATFORMER_CAMERA_LERP: float = 8.0      # camera catch-up speed (1/second)
+PLATFORMER_ANIM_FPS: float = 10.0        # player sprite frames per second
+PLATFORMER_COIN_SCORE: int = 50
+PLATFORMER_STOMP_SCORE: int = 100
+PLATFORMER_POWERUP_SCORE: int = 75
+PLATFORMER_CHECKPOINT_SCORE: int = 25
+PLATFORMER_FLAG_SCORE: int = 500
+PLATFORMER_POWERUP_DURATION: float = 8.0  # seconds a power-up lasts
+PLATFORMER_SPEED_MULTIPLIER: float = 1.6  # speed-shoe velocity multiplier
+
+# Space shooter: pooling, particles and waves
+BULLET_POOL_SIZE: int = 160       # pre-allocated bullets (both directions)
+ENEMY_POOL_SIZE: int = 96         # pre-allocated enemy hulls
+PARTICLE_POOL_SIZE: int = 400     # pre-allocated explosion particles
+PARTICLE_MAX_AGE: float = 0.9     # seconds a particle lives
+BOSS_WAVE_INTERVAL: int = 5       # a boss appears on every 5th wave
+BOSS_BASE_HP: int = 40            # boss hit points at wave 5
+BOSS_HP_PER_WAVE: int = 8         # extra boss HP per boss wave
+WAVE_BONUS_BASE: int = 20         # credits for clearing a wave, x wave number
+SHIELD_INVULN_SECONDS: float = 1.0  # grace period after a shield absorbs a hit
+
+# Enemy behaviour tuning. Enemies come in three flavours - Grunt (marches with
+# the fleet), Diver (breaks formation to dive at the player) and Sine (weaves
+# side to side) - so the player has to track different movement patterns.
+ENEMY_DIVE_SPEED_MULT: float = 2.6   # diver vertical speed vs its march speed
+ENEMY_DIVE_DEPTH: float = 520.0      # how far down a diver commits before pulling up
+ENEMY_CLIMB_SPEED_MULT: float = 1.4  # diver climb-back speed multiplier
+ENEMY_SINE_AMPLITUDE: float = 46.0   # horizontal sway of a sine weaver (px)
+ENEMY_SINE_FREQ: float = 0.05        # sway speed (radians per update)
+
+# Space shooter: upgrade shop (cost scales with each purchased level)
+UPGRADE_RAPID_BASE_COST: int = 100
+UPGRADE_RAPID_COST_STEP: int = 75
+UPGRADE_RAPID_MAX: int = 3
+UPGRADE_RAPID_COOLDOWN_SCALE: float = 0.75   # fire delay multiplier per level
+UPGRADE_MULTI_BASE_COST: int = 150
+UPGRADE_MULTI_MAX: int = 2
+UPGRADE_SHIELD_BASE_COST: int = 120
+UPGRADE_SHIELD_COST_STEP: int = 60
+UPGRADE_SHIELD_MAX: int = 3
+
+# Breakout
+BREAKOUT_LEVEL_COUNT: int = 5     # levels to clear for a full win
+BREAKOUT_SPEED_PER_LEVEL: float = 0.8  # base ball speed added per level
+POWERUP_DROP_CHANCE: float = 0.12      # chance a broken brick drops a power-up
+POWERUP_FALL_SPEED: float = 3.0        # power-up fall speed (px/frame)
+BALL_TRAIL_LENGTH: int = 12            # recorded positions for the ball trail
+PADDLE_WIDE_SCALE: float = 1.5         # width multiplier while WIDE is active
+PADDLE_WIDE_SECONDS: float = 12.0
+LASER_COOLDOWN_MS: int = 350           # ms between laser shots
+LASER_SECONDS: float = 8.0
+MULTIBALL_COUNT: int = 2               # extra balls granted by MULTI
+MULTIBALL_ANGLE: float = 0.5           # radians each extra ball is deflected by
