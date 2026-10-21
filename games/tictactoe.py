@@ -65,6 +65,9 @@ class Board:
     def winner(self) -> Mark | None:
         """Return the winning mark, or None."""
         for a, b, c in WIN_LINES:
+            # The chained `is` checks that all three cells hold the same mark.
+            # The first guard rules out three EMPTY cells, which would
+            # otherwise "match" on any unfilled line.
             if self.cells[a] is not Mark.EMPTY and self.cells[a] is self.cells[b] is self.cells[c]:
                 return self.cells[a]
         return None
@@ -95,11 +98,17 @@ class MinimaxAI:
 
     def choose_move(self, board: Board) -> int:
         """Return the index of the best move for :attr:`mark`."""
+        # Seed with -inf so that even a move scoring below -2 (i.e. a forced
+        # loss) still gets recorded. Starting at a finite number like -2 would
+        # skip such moves and leave best_move as the sentinel -1.
         best_score = float("-inf")
         best_move = -1
+        # For every legal move: play it, score the resulting position under the
+        # assumption both sides play perfectly afterwards, then undo it. Using
+        # make/undo avoids deep-copying the board at each branch.
         for move in board.available_moves():
             board.make_move(move, self.mark)
-            score = self._minimax(board, 0, False)
+            score = self._minimax(board, 0, False)  # False -> opponent to move
             board.undo_move(move)
             if score > best_score:
                 best_score = score
@@ -107,22 +116,30 @@ class MinimaxAI:
         return best_move
 
     def _minimax(self, board: Board, depth: int, maximizing: bool) -> float:
-        """Minimax scoring: +1 win, -1 loss, 0 draw (faster wins preferred)."""
+        """Minimax scoring: +1 win, -1 loss, 0 draw (faster wins preferred).
+
+        Scores are adjusted by ``depth`` so the AI prefers to win as quickly as
+        possible and to delay losing as long as possible. ``maximizing`` is
+        True when it is this AI's turn (pick the highest score) and False for
+        the opponent's turn (they pick the lowest).
+        """
         winner = board.winner()
         if winner is self.mark:
-            return 10.0 - depth
+            return 10.0 - depth  # shallower (quicker) win scores higher
         if winner is self.opponent:
-            return depth - 10.0
+            return depth - 10.0  # deeper (later) loss is less bad
         if board.is_full():
-            return 0.0
+            return 0.0  # draw
 
         if maximizing:
+            # Our turn: choose the move with the best (highest) outcome.
             best = -2.0
             for move in board.available_moves():
                 board.make_move(move, self.mark)
                 best = max(best, self._minimax(board, depth + 1, False))
                 board.undo_move(move)
             return best
+        # Opponent's turn: assume they play their best (lowest for us) move.
         best = 2.0
         for move in board.available_moves():
             board.make_move(move, self.opponent)
@@ -157,10 +174,12 @@ class TicTacToeGame(BaseGame):
         self.score = 0
 
     def _cell_rects(self) -> list[pygame.Rect]:
+        """Screen rectangles for the 9 cells, laid out as a centred 3x3 grid."""
         size = config.TTT_CELL_SIZE
         total = size * 3
-        ox = (config.SCREEN_WIDTH - total) // 2
-        oy = (config.SCREEN_HEIGHT - total) // 2 + 20
+        ox = (config.SCREEN_WIDTH - total) // 2  # centre the grid horizontally
+        oy = (config.SCREEN_HEIGHT - total) // 2 + 20  # nudged down past the title
+        # Map flat index 0..8 to a grid position: i%3 -> column, i//3 -> row.
         return [
             pygame.Rect(ox + (i % 3) * size, oy + (i // 3) * size, size, size)
             for i in range(9)
@@ -191,17 +210,19 @@ class TicTacToeGame(BaseGame):
                     self.reset()
             elif event.type == pygame.MOUSEBUTTONDOWN and not self.game_over:
                 if self.board.winner() is not None:
-                    return True
+                    return True  # game already decided; ignore further clicks
                 pos = event.pos
                 for i, rect in enumerate(self._cell_rects()):
                     if rect.collidepoint(pos) and self.board.cells[i] is Mark.EMPTY:
+                        # Human plays first, then we check the result. Only if
+                        # the game is still live does the AI reply.
                         self.board.make_move(i, self.human)
                         self._handle_result()
                         if not self.game_over and self.board.winner() is None and not self.board.is_full():
                             ai_move = self.ai.choose_move(self.board)
                             self.board.make_move(ai_move, self.ai.mark)
                             self._handle_result()
-                        break
+                        break  # stop at the first cell the click landed in
         return True
 
     def update(self, dt: float) -> None:

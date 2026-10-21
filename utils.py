@@ -47,7 +47,11 @@ def load_settings(path: Path = config.SETTINGS_FILE) -> Settings:
     try:
         raw: dict[str, Any] = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        # OSError = file missing/unreadable; JSONDecodeError = corrupt file.
+        # Either way we silently fall back to factory defaults.
         return Settings()
+    # Only forward keys that match a known field so a settings file written by
+    # an older/newer version (with extra keys) can't crash construction.
     known = {f for f in Settings.__dataclass_fields__}
     return Settings(**{k: v for k, v in raw.items() if k in known}).clamp()
 
@@ -102,6 +106,9 @@ class HighScoreStore:
             """
         )
         self._conn.execute(
+            # Composite index on (game, score DESC) makes the frequent
+            # "top N for a game" queries in top_scores() a fast index-only
+            # scan instead of a full table sort.
             "CREATE INDEX IF NOT EXISTS idx_hs_game ON highscores (game, score DESC)"
         )
         self._conn.commit()
@@ -134,10 +141,11 @@ class HighScoreStore:
     def is_top_n(self, game: str, score: int, limit: int = 5) -> bool:
         """Return True when *score* would crack the top *limit* for *game*."""
         if score <= 0:
-            return False
+            return False  # zero/negative scores never qualify
         scores = self.top_scores(game, limit=limit)
         if len(scores) < limit:
-            return True
+            return True  # board isn't full yet, so any positive score gets in
+        # Board is full: only beat the current last-place score.
         return score > scores[-1].score
 
     def clear(self, game: str | None = None) -> None:
@@ -167,7 +175,11 @@ _FONT_CACHE: dict[tuple[int, bool], pygame.font.Font] = {}
 
 
 def get_font(size: int, bold: bool = False) -> pygame.font.Font:
-    """Return a cached font of the given *size*."""
+    """Return a cached font of the given *size*.
+
+    Building a Font object is relatively expensive, so we cache one per
+    (size, bold) pair and reuse it across frames and games.
+    """
     key = (size, bold)
     if key not in _FONT_CACHE:
         font = pygame.font.SysFont(config.FONT_NAME, size, bold=bold)

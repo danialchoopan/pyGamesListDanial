@@ -84,14 +84,22 @@ class BreakoutPhysics:
 
     @staticmethod
     def bounce_paddle(ball: Ball, paddle: pygame.Rect, speed: float) -> None:
-        """Bounce off the paddle, angling based on hit position."""
+        """Bounce off the paddle, angling based on hit position.
+
+        This is the core Breakout skill: hitting with the paddle's edge steers
+        the ball sharply, while a centre hit sends it straight back up.
+        """
+        # Only bounce when the ball is moving down and clips the TOP half of
+        # the paddle; the centery check stops side-on passes from glitching.
         if ball.vy > 0 and ball.rect.colliderect(paddle) and ball.y < paddle.centery:
-            ball.y = paddle.top - ball.radius
+            ball.y = paddle.top - ball.radius  # rest the ball on the paddle
+            # Horizontal offset of the impact, normalised to -1 (left edge)
+            # .. +1 (right edge), then mapped to a deflection angle up to 60°.
             offset = (ball.x - paddle.centerx) / (paddle.width / 2)
             offset = max(-1.0, min(1.0, offset))
             angle = offset * (math.pi / 3)  # up to 60 degrees
             ball.vx = speed * math.sin(angle)
-            ball.vy = -speed * math.cos(angle)
+            ball.vy = -speed * math.cos(angle)  # negative = travel upward
 
     @staticmethod
     def bounce_bricks(ball: Ball, bricks: list[Brick], speed: float) -> int:
@@ -100,7 +108,9 @@ class BreakoutPhysics:
         for brick in bricks:
             if not brick.alive or not ball.rect.colliderect(brick.rect):
                 continue
-            # Determine minimal penetration axis for the bounce direction
+            # Reflect along the axis of LEAST penetration (the shallowest
+            # overlap). That's the face the ball actually grazed, so it bounces
+            # out the way it came instead of getting wedged in a corner.
             overlap_x = min(ball.rect.right - brick.rect.left, brick.rect.right - ball.rect.left)
             overlap_y = min(ball.rect.bottom - brick.rect.top, brick.rect.bottom - ball.rect.top)
             if overlap_x < overlap_y:
@@ -192,6 +202,8 @@ class BreakoutGame(BaseGame):
         self.paddle.left = max(0, min(self.paddle.left, config.SCREEN_WIDTH - self.paddle.width))
 
         if self._stuck:
+            # While "stuck" the ball rides the paddle until the player launches
+            # it with SPACE, so they can aim before play starts.
             self.ball.x = float(self.paddle.centerx)
             self.ball.y = float(self.paddle.top - config.BALL_SIZE)
             return
@@ -211,7 +223,8 @@ class BreakoutGame(BaseGame):
         if earned:
             self.score += earned
             self.ball_speed += config.BALL_SPEEDUP_PER_HIT
-            # Preserve direction while scaling speed
+            # Speed up without changing course: rescale the velocity vector to
+            # the new magnitude (hypot) while preserving its direction.
             mag = math.hypot(self.ball.vx, self.ball.vy) or 1.0
             self.ball.vx *= self.ball_speed / mag
             self.ball.vy *= self.ball_speed / mag

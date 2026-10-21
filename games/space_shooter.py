@@ -78,14 +78,17 @@ class WaveManager:
         self._spawn_wave()
 
     def _spawn_wave(self) -> None:
+        """Create the fleet for the current wave, scaling difficulty."""
         self.enemies = []
+        # Difficulty ramps with the wave number: an extra row every 2 waves
+        # (capped at 6), +1 HP every 3 waves, and speed climbs each wave.
         rows = min(config.ENEMY_ROWS + (self.wave - 1) // 2, 6)
         cols = config.ENEMY_COLS
         spacing_x = 90
         spacing_y = 60
         grid_w = cols * spacing_x
-        ox = (config.SCREEN_WIDTH - grid_w) // 2 + spacing_x // 2
-        oy = 90
+        ox = (config.SCREEN_WIDTH - grid_w) // 2 + spacing_x // 2  # centre the grid
+        oy = 90  # start below the HUD bar
         hp = 1 + (self.wave - 1) // 3
         speed = config.ENEMY_BASE_SPEED + (self.wave - 1) * 0.4
         for r in range(rows):
@@ -109,12 +112,14 @@ class WaveManager:
             self._spawn_wave()
             return
         alive = self.alive_enemies
+        # Find the fleet's horizontal extent; when it hits a screen edge the
+        # whole formation reverses and drops - the classic Galaga march.
         left = min(e.rect.left for e in alive)
         right = max(e.rect.right for e in alive)
         if (left <= 0 and self.direction < 0) or (right >= config.SCREEN_WIDTH and self.direction > 0):
             self.direction *= -1
             for e in alive:
-                e.y += 24  # descend like Galaga
+                e.y += 24  # descend one step on each direction change
         for e in alive:
             e.update(self.direction, (0, config.SCREEN_WIDTH))
 
@@ -172,6 +177,8 @@ class SpaceShooterGame(BaseGame):
         return True
 
     def _shoot(self) -> None:
+        # Rate-limit player fire using a millisecond cooldown so holding SPACE
+        # doesn't unleash a continuous stream of bullets.
         now = pygame.time.get_ticks()
         if now - self._last_shot >= config.BULLET_COOLDOWN_MS:
             self.bullets.append(Bullet(self.player_x, self.player_y - self.PLAYER_H // 2,
@@ -192,7 +199,8 @@ class SpaceShooterGame(BaseGame):
 
         self.wave_mgr.update()
 
-        # Enemy fire
+        # Enemy fire: the interval shrinks as waves rise (harder = faster fire)
+        # but is floored at 400ms so it never becomes unfair.
         now = pygame.time.get_ticks()
         if now - self._last_enemy_shot >= max(400, 1200 - self.wave_mgr.wave * 100):
             shooter = self.wave_mgr.random_shooter()

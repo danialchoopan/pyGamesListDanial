@@ -71,7 +71,9 @@ class Enemy(PhysicsBody):
             return
         self.vx = self.direction * self.speed
         _move_axis(self, level, axis="x")
-        # Ledge / wall detection: look one step ahead at foot level
+        # Turn around at ledges and walls. Probe a tiny 2x2 rect just ahead:
+        #  - at foot level: if there's no ground below (a drop-off), turn back;
+        #  - full height:   if there's a wall directly ahead, turn back.
         ahead_x = self.rect.right + 2 if self.direction > 0 else self.rect.left - 2
         foot_probe = pygame.Rect(ahead_x, self.rect.bottom + 2, 2, 2)
         if not level.solid_at(foot_probe) or level.solid_at(
@@ -102,6 +104,10 @@ class PlatformerLevel:
 
     def solid_at(self, rect: pygame.Rect) -> bool:
         """True when *rect* overlaps any solid tile."""
+        # Convert the rect's pixel edges to tile coordinates. We subtract 1
+        # from right/bottom because pygame rects treat those edges as
+        # exclusive - without it, a rect that merely abuts the next tile would
+        # wrongly count as overlapping it.
         left = rect.left // TILE
         right = (rect.right - 1) // TILE
         top = rect.top // TILE
@@ -123,29 +129,41 @@ class PlatformerLevel:
 
 
 def _move_axis(body: PhysicsBody, level: PlatformerLevel, axis: str) -> None:
-    """Move *body* along one axis, resolving solid-tile collisions."""
+    """Move *body* along one axis, resolving solid-tile collisions.
+
+    Classic "move, then un-penetrate" AABB approach: apply the velocity, and
+    if the body ended up overlapping a solid tile, snap it back to the tile
+    boundary it crossed and zero that axis of velocity. Axes are handled one
+    at a time so wall vs floor collisions stay independent.
+    """
     if axis == "x":
         body.x += body.vx
         rect = body.rect
         if level.solid_at(rect):
             if body.vx > 0:
+                # Moving right: push the body's left edge just left of the tile
+                # it entered. The -1 keeps it a pixel clear so it won't
+                # re-register as overlapping on the next frame.
                 rect.left = (rect.left // TILE) * TILE - 1
             elif body.vx < 0:
                 rect.right = (rect.right // TILE + 1) * TILE + 1
             body.x = float(rect.x)
-            body.vx = 0.0
+            body.vx = 0.0  # kill horizontal speed on impact
     else:
         body.y += body.vy
         rect = body.rect
-        body.on_ground = False
+        body.on_ground = False  # assume airborne until proven otherwise
         if level.solid_at(rect):
             if body.vy > 0:
+                # Falling and hit a floor: rest exactly on top of the tile and
+                # flag that we're standing on ground (enables jumping).
                 rect.bottom = (rect.bottom // TILE) * TILE
                 body.on_ground = True
             elif body.vy < 0:
+                # Rising and hit a ceiling: stop just below it.
                 rect.top = (rect.top // TILE) * TILE + TILE
             body.y = float(rect.y)
-            body.vy = 0.0
+            body.vy = 0.0  # kill vertical speed on impact
 
 
 class PlatformerGame(BaseGame):
@@ -210,7 +228,8 @@ class PlatformerGame(BaseGame):
         _move_axis(p, self.level, "x")
         _move_axis(p, self.level, "y")
 
-        # Camera follows the player, clamped to the level bounds
+        # Camera follows the player, keeping them ~40% from the left edge, but
+        # is clamped so it never scrolls past the level's start or end.
         level_px = self.level.width * TILE
         target = p.x - config.SCREEN_WIDTH * 0.4
         self.camera_x = max(0.0, min(target, level_px - config.SCREEN_WIDTH))
@@ -229,11 +248,13 @@ class PlatformerGame(BaseGame):
             if not enemy.alive:
                 continue
             if p_rect.colliderect(enemy.rect):
-                # Stomp kill when falling onto the enemy from above
+                # Stomp kill: only if the player is falling (vy > 0) AND their
+                # feet are near the enemy's head, i.e. landing on top. A small
+                # bounce rewards the stomp. Otherwise it's a side hit = lose a life.
                 if p.vy > 0 and p_rect.bottom - enemy.rect.top < 16:
                     enemy.alive = False
                     self.score += 100
-                    p.vy = config.PLATFORMER_JUMP_STRENGTH * 0.5
+                    p.vy = config.PLATFORMER_JUMP_STRENGTH * 0.5  # small bounce
                 else:
                     self._lose_life()
                     return

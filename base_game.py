@@ -79,16 +79,27 @@ class BaseGame(ABC):
     # Shared loop
     # ------------------------------------------------------------------
     def run(self) -> None:
-        """Run the game loop until the player quits back to the menu."""
+        """Run the game loop until the player quits back to the menu.
+
+        This is the canonical Pygame frame cycle that every game reuses:
+        poll events -> update state -> draw -> flip the back buffer.
+        Subclasses only fill in ``handle_events`` / ``update`` / ``draw``.
+        """
         self._running = True
         self.start()
         while self._running:
+            # clock.tick(fps) caps the frame rate AND returns the elapsed
+            # milliseconds since the last frame; /1000.0 converts it to the
+            # seconds we hand to update() so movement is frame-rate independent.
             dt = self.clock.tick(self.fps) / 1000.0
             events = pygame.event.get()
+            # A window-close request is handled centrally here so no game has
+            # to remember to deal with it.
             for event in events:
                 if event.type == pygame.QUIT:
                     self._running = False
                     return
+            # handle_events() returning False is the "back to menu" signal.
             if not self.handle_events(events):
                 self._running = False
                 return
@@ -103,7 +114,7 @@ class BaseGame(ABC):
                     config.LIGHT_GREY,
                     topleft=(8, 8),
                 )
-            pygame.display.flip()
+            pygame.display.flip()  # reveal everything drawn this frame
 
     def quit(self) -> None:
         """Signal the loop to stop and return to the menu."""
@@ -142,6 +153,8 @@ class BaseGame(ABC):
         subtitle: str | None = None,
     ) -> None:
         """Overlay a translucent game-over panel with the final score."""
+        # SRCALPHA makes a see-through surface; filling with alpha=160 darkens
+        # the whole screen so the panel text reads clearly over the gameplay.
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         overlay.fill((*config.BLACK, 160))
         surface.blit(overlay, (0, 0))

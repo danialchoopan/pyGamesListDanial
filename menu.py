@@ -76,6 +76,9 @@ class MainMenu:
 
     # ------------------------------------------------------------------
     def _launch_selected(self) -> None:
+        # Instantiate the chosen game with the shared screen/clock/settings and
+        # hand control to its run(). That call blocks this thread until the
+        # player presses ESC in-game; once it returns we resume the menu loop.
         game_cls = self.game_classes[self.selected]
         game = game_cls(
             screen=self.screen,
@@ -97,6 +100,8 @@ class MainMenu:
                     if event.key == pygame.K_ESCAPE:
                         running = False
                     elif event.key in (pygame.K_UP, pygame.K_w):
+                        # The % wraps the index, so moving up past the first
+                        # item loops to the last (and vice-versa for down).
                         self.selected = (self.selected - 1) % len(self.game_classes)
                     elif event.key in (pygame.K_DOWN, pygame.K_s):
                         self.selected = (self.selected + 1) % len(self.game_classes)

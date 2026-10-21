@@ -69,6 +69,9 @@ class SnakeLogic:
 
     def queue_direction(self, direction: Direction) -> None:
         """Queue a turn, ignoring reversals of the current heading."""
+        # Compare against the direction we're *actually* heading (a pending
+        # turn counts), so two rapid key presses in one tick can't reverse the
+        # snake into its own neck. Only the last legal turn is kept.
         target = self.direction if self._queued is None else self._queued
         if direction != target and _OPPOSITES.get(target) != direction:
             self._queued = direction
@@ -88,16 +91,20 @@ class SnakeLogic:
         if not (0 <= new_head[0] < self.grid_size and 0 <= new_head[1] < self.grid_size):
             self.alive = False
             return
-        # Self collision (tail cell will vacate unless growing)
+        # Self collision. When we're NOT growing, the tail cell will vacate
+        # this same tick, so sliding into the current tail position is legal -
+        # hence we exclude the tail from the collision set in that case.
         body = self.snake[:-1] if self.grow_pending == 0 else self.snake
         if new_head in body:
             self.alive = False
             return
 
+        # Prepend the new head, then either consume a queued growth (keep the
+        # tail) or pop the tail to maintain a constant length.
         self.snake.insert(0, new_head)
         if new_head == self.food:
             self.score += 10
-            self.grow_pending += 1
+            self.grow_pending += 1  # grow one cell on a later tick
             self.food = self._spawn_food()
         if self.grow_pending > 0:
             self.grow_pending -= 1
@@ -106,7 +113,7 @@ class SnakeLogic:
 
     @property
     def filled_cells(self) -> int:
-        """Number of occupied cells (3 + growth so far)."""
+        """Total cells on the board (grid_size x grid_size)."""
         return self.grid_size * self.grid_size
 
 
@@ -187,7 +194,10 @@ class SnakeGame(BaseGame):
 
         # Food
         pygame.draw.ellipse(surface, config.SNAKE_FOOD, cell_rect(*self.logic.food).inflate(-4, -4))
-        # Snake body + head
+        # Snake body + head.
+        # self.logic.snake is ordered head-first, so we iterate reversed() to
+        # draw tail->head (head ends up on top). In that reversed order the
+        # head is the LAST item, i.e. index len-1, which is what we test below.
         for i, (cx, cy) in enumerate(reversed(self.logic.snake)):
             color = config.SNAKE_HEAD if i == len(self.logic.snake) - 1 else config.SNAKE_BODY
             pygame.draw.rect(surface, color, cell_rect(cx, cy).inflate(-2, -2), border_radius=4)

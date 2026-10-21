@@ -27,9 +27,11 @@ def main() -> int:
     settings = load_settings()
     highscores = HighScoreStore()
 
+    # The try/finally guarantees we always save settings, close the DB and
+    # quit pygame - even if a game raises - so nothing is left locked/corrupt.
     try:
         menu = MainMenu(screen, clock, GAME_CLASSES, settings, highscores)
-        menu.run()
+        menu.run()  # returns only when the user quits the whole app
     finally:
         save_settings(settings)
         highscores.close()

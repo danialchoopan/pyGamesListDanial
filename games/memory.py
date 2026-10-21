@@ -40,6 +40,9 @@ class MemoryBoard:
     def reset(self) -> None:
         """Shuffle a fresh pair-matching layout."""
         pairs = (self.cols * self.rows) // 2
+        # Build one symbol per pair (cycling through CARD_SYMBOLS if there are
+        # more pairs than unique symbols), then *2 so each appears exactly
+        # twice, then shuffle so the layout is random.
         deck = [CARD_SYMBOLS[i % len(CARD_SYMBOLS)] for i in range(pairs)] * 2
         self.rng.shuffle(deck)
         self.symbols: list[str] = deck
@@ -47,7 +50,7 @@ class MemoryBoard:
         self.flipped: list[int] = []  # indices currently face-up (max 2)
         self.moves: int = 0
         self.matches_found: int = 0
-        self._lock_until: float = 0.0
+        self._lock_until: float = 0.0  # monotonic deadline for the mismatch reveal
 
     @property
     def total_pairs(self) -> int:
@@ -67,14 +70,16 @@ class MemoryBoard:
     def flip(self, index: int) -> str:
         """Flip card *index*.
 
-        Returns one of: ``"flipped"``, ``"match"``, ``"mismatch"``,
-        ``"ignored"`` (invalid/busy/already matched).
+        Tiny state machine returning what happened so the caller can react:
+        ``"flipped"`` (first card of a pair), ``"match"``, ``"mismatch"``,
+        or ``"ignored"`` (busy, already face-up, or already matched).
         """
         if self.is_busy or index in self.flipped or self.matched[index]:
             return "ignored"
         self.flipped.append(index)
         if len(self.flipped) < 2:
-            return "flipped"
+            return "flipped"  # wait for the second card of this pair
+        # Two cards are now face-up: decide match vs mismatch.
         self.moves += 1
         a, b = self.flipped
         if self.symbols[a] == self.symbols[b]:
@@ -82,6 +87,8 @@ class MemoryBoard:
             self.matches_found += 1
             self.flipped.clear()
             return "match"
+        # Mismatch: lock input briefly so the player can see both cards before
+        # resolve_mismatch() flips them back face-down.
         self._lock_until = time.monotonic() + 0.8
         return "mismatch"
 
@@ -92,8 +99,12 @@ class MemoryBoard:
 
     def score(self, elapsed: float) -> int:
         """Compute the final score from moves and elapsed *seconds*."""
-        base = self.matches_found * config.MEMORY_MATCH_SCORE
+        base = self.matches_found * config.MEMORY_MATCH_SCORE  # points per pair
+        # Only "wasted" flips (moves beyond the ideal one-per-pair) are
+        # penalised, so perfect play takes no hit.
         penalty = max(0, self.moves - self.matches_found) * config.MEMORY_MISMATCH_PENALTY
+        # Reward finishing quickly; the bonus shrinks as time grows and is only
+        # granted when the board is fully cleared.
         bonus = max(0, int((60.0 - elapsed) * config.MEMORY_TIME_BONUS_FACTOR))
         return max(0, base - penalty + (bonus if self.is_complete else 0))
 

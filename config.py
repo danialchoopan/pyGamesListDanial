@@ -24,9 +24,11 @@ SCREEN_HEIGHT: int = 768
 SCREEN_TITLE: str = "Python Game Hub"
 FPS: int = 60
 
-# Default frame rates per game (some games run better faster/slower)
+# Target frame rates per game. Slow/turn-based games (Snake, Tic-Tac-Toe)
+# run at a low FPS on purpose: their logic advances one step per frame, so a
+# low FPS literally slows the game down. Real-time games use the full 60.
 DEFAULT_FPS: int = FPS
-SNAKE_FPS: int = 10
+SNAKE_FPS: int = 10  # one grid step per tick -> lower FPS = calmer snake
 TICTACTOE_FPS: int = 30
 MEMORY_FPS: int = 60
 PLATFORMER_FPS: int = 60
@@ -36,6 +38,8 @@ BREAKOUT_FPS: int = 60
 # --------------------------------------------------------------------------
 # Colors (R, G, B)
 # --------------------------------------------------------------------------
+# Type alias so every color in the codebase reads as an RGB triple. A named
+# alias documents intent and lets type-checkers catch shape mismatches.
 Color = tuple[int, int, int]
 
 BLACK: Color = (0, 0, 0)
@@ -96,6 +100,8 @@ BRICK_COLORS: tuple[Color, ...] = (
 # --------------------------------------------------------------------------
 # Audio
 # --------------------------------------------------------------------------
+# These are only *defaults*. The user's live values live in utils.Settings and
+# are persisted to data/settings.json. pygame expects volumes in 0.0 - 1.0.
 DEFAULT_MUSIC_VOLUME: float = 0.5  # 0.0 - 1.0
 DEFAULT_SFX_VOLUME: float = 0.7  # 0.0 - 1.0
 MIN_VOLUME: float = 0.0
@@ -119,9 +125,12 @@ MENU_START_Y: int = 220
 # --------------------------------------------------------------------------
 # Game rules / tuning
 # --------------------------------------------------------------------------
+# Magic numbers that define how each game *plays*. Keep them here (not
+# hard-coded inside the games) so the games can be rebalanced by editing one
+# file without touching any logic.
 # Snake
-SNAKE_CELL_SIZE: int = 25
-SNAKE_GRID_SIZE: int = 24  # 24x24 cells playable area
+SNAKE_CELL_SIZE: int = 25   # pixel size of one grid cell
+SNAKE_GRID_SIZE: int = 24   # 24x24 cells playable area
 
 # Memory
 MEMORY_COLS: int = 4
@@ -131,17 +140,17 @@ MEMORY_MISMATCH_PENALTY: int = 10
 MEMORY_TIME_BONUS_FACTOR: int = 5
 
 # Platformer
-PLATFORMER_GRAVITY: float = 0.8
-PLATFORMER_JUMP_STRENGTH: float = -14.0
+PLATFORMER_GRAVITY: float = 0.8       # pixels/frame^2 added to vy each tick
+PLATFORMER_JUMP_STRENGTH: float = -14.0  # negative = upward (screen y grows down)
 PLATFORMER_MOVE_SPEED: float = 5.0
 PLATFORMER_TILE_SIZE: int = 40
 
 # Space shooter
 PLAYER_SPEED: float = 6.0
-PLAYER_BULLET_SPEED: float = -10.0
-ENEMY_BULLET_SPEED: float = 5.0
+PLAYER_BULLET_SPEED: float = -10.0    # negative = bullet travels up the screen
+ENEMY_BULLET_SPEED: float = 5.0       # positive = bullet travels down
 ENEMY_BASE_SPEED: float = 2.0
-BULLET_COOLDOWN_MS: int = 250
+BULLET_COOLDOWN_MS: int = 250         # min ms between player shots (fire rate)
 ENEMY_ROWS: int = 4
 ENEMY_COLS: int = 8
 
