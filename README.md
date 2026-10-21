@@ -59,7 +59,8 @@ danialPyGames/
 │   ├── test_run.py
 │   └── test_games_registry.py
 ├── .github/workflows/ci.yml  # GitHub Actions: lint + typecheck + test
-├── config.toml / pyproject.toml   # tool config (pytest, ruff, mypy)
+├── pyproject.toml            # tool config (pytest, ruff, mypy, coverage)
+├── .gitignore                # keeps venv/, data/ and caches out of git
 ├── requirements.txt        # Runtime dependencies
 ├── requirements-dev.txt    # Dev/test dependencies
 └── README.md
@@ -92,8 +93,8 @@ git clone https://github.com/<your-username>/danialPyGames.git
 cd danialPyGames
 
 # 2. Create and activate a virtual environment
-python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # 3. Install runtime dependencies
 pip install -r requirements.txt
@@ -167,7 +168,7 @@ Global settings live in [`config.py`](config.py): screen size, the color palette
 
 ## 🔧 CI / CD
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request to `main`/`master` across Python **3.10–3.12**:
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request to `main`/`master` across Python **3.10–3.13**:
 
 1. Install dependencies
 2. `ruff check .` — lint

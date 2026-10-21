@@ -1,27 +1,47 @@
-# Python
+# ---- Python ----
 __pycache__/
 *.py[cod]
 *.egg-info/
+.eggs/
 dist/
 build/
+pip-wheel-metadata/
 
-# Virtual env
+# ---- Virtual environments ----
 .venv/
 venv/
 env/
+.env/
 
-# Test / type / lint caches
+# ---- Secrets / local config ----
+.env
+.env.*
+
+# ---- Test / type / lint caches & reports ----
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 .coverage
+.coverage.*
 htmlcov/
+.tox/
+.nox/
 
-# Runtime data
+# ---- Packaging (PyInstaller etc.) ----
+*.manifest
+*.spec
+
+# ---- Runtime data ----
 data/
 *.db
+*.sqlite3
 
-# OS / editor
+# ---- OS / editor ----
 .DS_Store
+Thumbs.db
 .idea/
 .vscode/
+.fleet/
+*.swp
+*.swo
+*~
