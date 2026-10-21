@@ -28,6 +28,7 @@ Every game tracks **high scores** in a local SQLite database.
 ```
 danialPyGames/
 ├── main.py                 # Entry point: boots pygame + main menu
+├── run.py                  # CLI launcher: --list games, --game NAME to jump in
 ├── menu.py                 # Pygame main-menu implementation
 ├── base_game.py            # Abstract BaseGame all games inherit from
 ├── config.py               # Global settings (screen, colors, audio, tuning)
@@ -93,7 +94,17 @@ pip install -r requirements-dev.txt
 ### ▶️ Run the Game Hub
 
 ```bash
-python main.py
+python main.py      # boot straight into the menu
+```
+
+Or use the `run.py` launcher, which can also list the games and jump
+straight into one without the menu:
+
+```bash
+python run.py                 # same as main.py - boot the menu
+python run.py --list          # print the games (keys + descriptions) and exit
+python run.py --game snake    # launch a single game by key or name
+python run.py --game Breakout # names are matched case-insensitively
 ```
 
 ---
