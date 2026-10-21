@@ -1,1 +1,6 @@
-pygame>=2.5.0
+# The hub runs on pygame-ce, the actively maintained community fork of pygame.
+# It ships the same `import pygame` module, and pygame-gui (below) requires it.
+pygame-ce>=2.5.3
+
+# Themed UI widgets (menu, pause/game-over dialogs) layered on top of pygame.
+pygame-gui>=0.6.14

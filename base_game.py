@@ -27,6 +27,7 @@ import pygame
 
 import config
 from assets import AudioService, get_assets
+from ui import DialogAction, GameUI
 from utils import HighScoreStore, Settings, draw_text
 
 
@@ -43,6 +44,12 @@ class BaseGame(ABC):
     fps: int = config.DEFAULT_FPS
     #: Optional background-music track (see :mod:`assets`); None = no music.
     music_track: str | None = None
+
+    #: Dialog UI (pause / game-over with buttons), built in ``__init__``.
+    #: Declared at class level so a subclass that skips ``__init__`` (the
+    #: headless unit-test stub) still resolves to ``None`` and falls back to
+    #: the plain-text overlays instead of raising AttributeError.
+    _ui: GameUI | None = None
 
     def __init__(
         self,
@@ -110,7 +117,18 @@ class BaseGame(ABC):
         return self.paused
 
     def draw_pause_overlay(self, surface: pygame.Surface) -> None:
-        """Draw the translucent \"PAUSED\" banner over the frozen frame."""
+        """Draw the pause banner over the frozen frame.
+
+        Uses the pygame-gui pause dialog (with working Resume / Restart /
+        Menu buttons) when a display is available, and falls back to a
+        plain-text banner for headless unit tests.
+        """
+        ui = self._ensure_ui()
+        if ui is not None:
+            ui.show_pause()
+            ui.draw(surface)
+            return
+
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         overlay.fill((*config.BLACK, 150))
         surface.blit(overlay, (0, 0))
@@ -147,6 +165,20 @@ class BaseGame(ABC):
                 # seconds we hand to update() so movement is frame-rate independent.
                 dt = self.clock.tick(self.fps) / 1000.0
                 events = pygame.event.get()
+
+                # Give the dialog layer first refusal on every event so its
+                # buttons (Resume / Restart / Retry / Menu) work, then apply
+                # whatever action a click requested.
+                ui = self._ensure_ui()
+                if ui is not None:
+                    ui.feed(events)
+                    ui.update(dt)
+                    action = ui.pop_action()
+                    while action is not None:
+                        if not self._apply_dialog_action(action):
+                            return
+                        action = ui.pop_action()
+
                 for event in events:
                     # A window-close request is handled centrally here so no
                     # game has to remember to deal with it.
@@ -197,6 +229,47 @@ class BaseGame(ABC):
         self._running = False
 
     # ------------------------------------------------------------------
+    # Dialog UI (pygame-gui)
+    # ------------------------------------------------------------------
+    def _ensure_ui(self) -> GameUI | None:
+        """Build the pygame-gui dialog layer on first use.
+
+        Returns ``None`` when no video device is initialised (headless unit
+        tests), which makes every dialog call fall back to the plain-text
+        overlays above so the suite never needs a real window.
+        """
+        if self._ui is None and pygame.display.get_init():
+            try:
+                self._ui = GameUI(self.screen.get_size())
+            except pygame.error:
+                # A display exists but the toolkit couldn't start; degrade
+                # gracefully to the text overlays rather than crash the game.
+                return None
+        return self._ui
+
+    def _apply_dialog_action(self, action: DialogAction) -> bool:
+        """React to a pause/game-over button press.
+
+        Returns ``False`` to tell :meth:`run` to leave the game (the "menu"
+        button); every other action keeps the loop running.
+        """
+        if action is DialogAction.MENU:
+            self._running = False
+            return False
+        if action is DialogAction.RESUME:
+            if self.paused:
+                self.toggle_pause()
+            return True
+        # RETRY / RESTART -> leave any pause, start a fresh run, and hide the
+        # game-over dialog (draw() will re-show it only if still over).
+        if self.paused:
+            self.toggle_pause()
+        self.reset()
+        if self._ui is not None:
+            self._ui.hide_game_over()
+        return True
+
+    # ------------------------------------------------------------------
     # Scoring
     # ------------------------------------------------------------------
     def submit_score(self, name: str = "AAA") -> None:
@@ -228,7 +301,18 @@ class BaseGame(ABC):
         message: str = "GAME OVER",
         subtitle: str | None = None,
     ) -> None:
-        """Overlay a translucent game-over panel with the final score."""
+        """Overlay a translucent game-over panel with the final score.
+
+        Uses the pygame-gui game-over dialog (with working Retry / Menu
+        buttons) when a display is available, and falls back to a plain-text
+        panel for headless unit tests.
+        """
+        ui = self._ensure_ui()
+        if ui is not None:
+            ui.show_game_over(message, subtitle, self.score, self.best_score)
+            ui.draw(surface)
+            return
+
         # SRCALPHA makes a see-through surface; filling with alpha=160 darkens
         # the whole screen so the panel text reads clearly over the gameplay.
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
